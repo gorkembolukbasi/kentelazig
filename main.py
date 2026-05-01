@@ -55,35 +55,36 @@ def get_page_details(url):
         content = content[:900]
 
         return content, image_url
-    except:
+    except Exception as e:
+        print("Sayfa detay hatası:", str(e))
         return "", None
 
 
 def send_text(text):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, data={
-        "chat_id": CHAT_ID,
-        "text": text,
-        "parse_mode": "HTML",
-        "disable_web_page_preview": False
-    })
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        requests.post(url, data={
+            "chat_id": CHAT_ID,
+            "text": text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": False
+        }, timeout=10)
+    except Exception as e:
+        print("Mesaj gönderme hatası:", str(e))
 
 
 def send_photo(caption, image_url):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-    requests.post(url, data={
-        "chat_id": CHAT_ID,
-        "photo": image_url,
-        "caption": caption,
-        "parse_mode": "HTML"
-    })
-
-
-def send_news_message(message, image_url=None):
-    if image_url:
-        send_photo(message, image_url)
-    else:
-        send_text(message)
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+        requests.post(url, data={
+            "chat_id": CHAT_ID,
+            "photo": image_url,
+            "caption": caption,
+            "parse_mode": "HTML"
+        }, timeout=10)
+    except Exception as e:
+        print("Foto gönderme hatası:", str(e))
+        send_text(caption)
 
 
 def check_news():
@@ -91,32 +92,33 @@ def check_news():
     last_check_time = turkiye_saati()
 
     for rss in RSS_FEEDS:
-        feed = feedparser.parse(rss)
+        try:
+            feed = feedparser.parse(rss)
 
-        for entry in reversed(feed.entries[:20]):
-            title = clean_text(entry.get("title", ""))
-            summary = clean_text(entry.get("summary", ""))
-            link = entry.get("link", "")
+            for entry in reversed(feed.entries[:20]):
+                title = clean_text(entry.get("title", ""))
+                summary = clean_text(entry.get("summary", ""))
+                link = entry.get("link", "")
 
-            search_area = f"{title} {summary}".lower()
+                search_area = f"{title} {summary}".lower()
 
-            if KEYWORD not in search_area and "elazig" not in search_area:
-                continue
+                if KEYWORD not in search_area and "elazig" not in search_area:
+                    continue
 
-            if not link or link in seen_links:
-                continue
+                if not link or link in seen_links:
+                    continue
 
-            seen_links.add(link)
+                seen_links.add(link)
 
-            source = feed.feed.get("title", "Bilinmiyor")
-            published = entry.get("published", "Tarih bilgisi yok")
+                source = feed.feed.get("title", "Bilinmiyor")
+                published = entry.get("published", "Tarih bilgisi yok")
 
-            content, image_url = get_page_details(link)
+                content, image_url = get_page_details(link)
 
-            if not content:
-                content = summary if summary else "İçerik alınamadı."
+                if not content:
+                    content = summary if summary else "İçerik alınamadı."
 
-            message = f"""
+                message = f"""
 📰 <b>Kent Elazığ Haber</b>
 
 <b>Haber Başlığı:</b> {html.escape(title)}
@@ -129,28 +131,35 @@ def check_news():
 <b>Yayınlanma Tarihi:</b> {html.escape(published)}
 """
 
-            send_news_message(message, image_url)
+                if image_url:
+                    send_photo(message, image_url)
+                else:
+                    send_text(message)
+
+        except Exception as e:
+            print("RSS kontrol hatası:", rss, str(e))
 
 
 def handle_commands():
     global last_update_id
 
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
 
-    params = {}
-    if last_update_id is not None:
-        params["offset"] = last_update_id + 1
+        params = {}
+        if last_update_id is not None:
+            params["offset"] = last_update_id + 1
 
-    res = requests.get(url, params=params, timeout=10).json()
+        res = requests.get(url, params=params, timeout=10).json()
 
-    for update in res.get("result", []):
-        last_update_id = update["update_id"]
+        for update in res.get("result", []):
+            last_update_id = update.get("update_id", last_update_id)
 
-        message = update.get("message", {})
-        text = message.get("text", "")
+            message = update.get("message", {})
+            text = message.get("text", "")
 
-        if text.startswith("/durum"):
-            durum_mesaji = f"""
+            if text.startswith("/durum"):
+                durum_mesaji = f"""
 🤖 <b>Bot Durumu</b>
 
 Durum: Aktif ✅
@@ -158,14 +167,13 @@ Son kontrol: {last_check_time}
 Toplam kaynak: {len(RSS_FEEDS)}
 Toplanan haber: {len(seen_links)}
 """
-            send_text(durum_mesaji)
+                send_text(durum_mesaji)
+
+    except Exception as e:
+        print("Komut kontrol hatası:", str(e))
 
 
 while True:
-    try:
-        check_news()
-        handle_commands()
-    except Exception as e:
-        send_text(f"⚠️ Hata: {html.escape(str(e))}")
-
+    check_news()
+    handle_commands()
     time.sleep(60)
