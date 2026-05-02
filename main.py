@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-KEYWORD = "elazığ"
+KEYWORDS = ["elazığ", "elazig"]
 
 RSS_FEEDS = [
     "https://rss.haberler.com/",
@@ -39,6 +39,11 @@ def clean_text(text):
     return soup.get_text(" ", strip=True)
 
 
+def keyword_var_mi(text):
+    text = (text or "").lower()
+    return any(keyword in text for keyword in KEYWORDS)
+
+
 def get_page_details(url):
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
@@ -51,12 +56,12 @@ def get_page_details(url):
             image_url = og_image["content"]
 
         paragraphs = soup.find_all("p")
-        content = " ".join(p.get_text(" ", strip=True) for p in paragraphs[:5])
-        content = content[:900]
+        content = " ".join(p.get_text(" ", strip=True) for p in paragraphs[:8])
+        content = content[:1200]
 
         return content, image_url
     except Exception as e:
-        print("Sayfa detay hatası:", str(e))
+        print("get_page_details hatasi:", e)
         return "", None
 
 
@@ -70,7 +75,7 @@ def send_text(text):
             "disable_web_page_preview": False
         }, timeout=10)
     except Exception as e:
-        print("Mesaj gönderme hatası:", str(e))
+        print("send_text hatasi:", e)
 
 
 def send_photo(caption, image_url):
@@ -83,8 +88,14 @@ def send_photo(caption, image_url):
             "parse_mode": "HTML"
         }, timeout=10)
     except Exception as e:
-        print("Foto gönderme hatası:", str(e))
-        send_text(caption)
+        print("send_photo hatasi:", e)
+
+
+def send_news_message(message, image_url=None):
+    if image_url:
+        send_photo(message, image_url)
+    else:
+        send_text(message)
 
 
 def check_news():
@@ -100,20 +111,20 @@ def check_news():
                 summary = clean_text(entry.get("summary", ""))
                 link = entry.get("link", "")
 
-                search_area = f"{title} {summary}".lower()
-
-                if KEYWORD not in search_area and "elazig" not in search_area:
+                if not link or link in seen_links:
                     continue
 
-                if not link or link in seen_links:
+                content, image_url = get_page_details(link)
+
+                search_area = f"{title} {summary} {content}"
+
+                if not keyword_var_mi(search_area):
                     continue
 
                 seen_links.add(link)
 
                 source = feed.feed.get("title", "Bilinmiyor")
                 published = entry.get("published", "Tarih bilgisi yok")
-
-                content, image_url = get_page_details(link)
 
                 if not content:
                     content = summary if summary else "İçerik alınamadı."
@@ -131,13 +142,10 @@ def check_news():
 <b>Yayınlanma Tarihi:</b> {html.escape(published)}
 """
 
-                if image_url:
-                    send_photo(message, image_url)
-                else:
-                    send_text(message)
+                send_news_message(message, image_url)
 
         except Exception as e:
-            print("RSS kontrol hatası:", rss, str(e))
+            print("RSS kontrol hatasi:", rss, e)
 
 
 def handle_commands():
@@ -153,7 +161,7 @@ def handle_commands():
         res = requests.get(url, params=params, timeout=10).json()
 
         for update in res.get("result", []):
-            last_update_id = update.get("update_id", last_update_id)
+            last_update_id = update["update_id"]
 
             message = update.get("message", {})
             text = message.get("text", "")
@@ -170,7 +178,7 @@ Toplanan haber: {len(seen_links)}
                 send_text(durum_mesaji)
 
     except Exception as e:
-        print("Komut kontrol hatası:", str(e))
+        print("handle_commands hatasi:", e)
 
 
 while True:
