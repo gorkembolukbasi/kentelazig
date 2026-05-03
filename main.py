@@ -8,7 +8,14 @@ from datetime import datetime, timedelta
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-KEYWORDS = ["elazığ", "elazig"]
+SEARCH_WORDS = [
+    "elazığ",
+    "elazig",
+    "elazığda",
+    "elazigda",
+    "elazığ'da",
+    "elazig'da"
+]
 
 RSS_FEEDS = [
     "https://rss.haberler.com/RssNew.aspx",
@@ -43,9 +50,9 @@ def turkiye_saati():
     return (datetime.utcnow() + timedelta(hours=3)).strftime("%d.%m.%Y %H:%M:%S")
 
 
-def keyword_var_mi(text):
+def elazig_var_mi(text):
     text = (text or "").lower()
-    return any(k in text for k in KEYWORDS)
+    return any(word in text for word in SEARCH_WORDS)
 
 
 def send_text(text):
@@ -113,7 +120,7 @@ def check_news():
 
                 search_area = f"{title} {summary}"
 
-                if not keyword_var_mi(search_area):
+                if not elazig_var_mi(search_area):
                     continue
 
                 seen_links.add(link)
