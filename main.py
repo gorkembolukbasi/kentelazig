@@ -111,8 +111,8 @@ def check_news():
             feed = feedparser.parse(rss)
 
             for entry in reversed(feed.entries[:40]):
-                title = entry.get("title", "")
-                summary = entry.get("summary", "")
+                title = html.unescape(entry.get("title", ""))
+                summary = html.unescape(entry.get("summary", ""))
                 link = entry.get("link", "")
 
                 if not link or link in seen_links:
@@ -125,7 +125,7 @@ def check_news():
 
                 seen_links.add(link)
 
-                source = feed.feed.get("title", "Bilinmiyor")
+                source = html.unescape(feed.feed.get("title", "Bilinmiyor"))
                 published = entry.get("published", "Tarih bilgisi yok")
                 content = summary if summary else "İçerik bulunamadı."
                 image_url = get_image(entry)
