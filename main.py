@@ -13,19 +13,25 @@ KEYWORDS = ["elazığ", "elazig"]
 RSS_FEEDS = [
     "https://rss.haberler.com/RssNew.aspx",
     "https://rss.haberler.com/",
-    "https://news.google.com/rss/search?q=Elaz%C4%B1%C4%9F&hl=tr&gl=TR&ceid=TR:tr",
 
     "https://www.trthaber.com/sondakika_articles.rss",
     "https://www.trthaber.com/gundem_articles.rss",
     "https://www.trthaber.com/turkiye_articles.rss",
 
-    "https://www.bursasaati.com.tr/rss",
     "https://www.sondakika.com/elazig/rss/",
+    "https://www.bursasaati.com.tr/rss",
 
     "https://www.haberturk.com/rss",
     "https://haberglobal.com.tr/rss",
     "https://www.ntv.com.tr/turkiye.rss",
-    "https://www.ntv.com.tr/gundem.rss"
+    "https://www.ntv.com.tr/gundem.rss",
+
+    "https://www.cnnturk.com/feed/rss/turkiye/news",
+    "https://www.milliyet.com.tr/rss/rssNew/turkiye.xml",
+    "https://www.aksam.com.tr/rss/rss.asp",
+    "https://www.yeniakit.com.tr/rss",
+    "https://www.takvim.com.tr/rss",
+    "https://www.sabah.com.tr/rss/anasayfa.xml"
 ]
 
 seen_links = set()
@@ -51,8 +57,8 @@ def send_text(text):
             "parse_mode": "HTML",
             "disable_web_page_preview": False
         }, timeout=10)
-    except:
-        pass
+    except Exception as e:
+        print("Mesaj hatası:", e)
 
 
 def send_photo(caption, image_url):
@@ -68,7 +74,8 @@ def send_photo(caption, image_url):
         if response.status_code != 200:
             send_text(caption)
 
-    except:
+    except Exception as e:
+        print("Foto hatası:", e)
         send_text(caption)
 
 
@@ -104,7 +111,7 @@ def check_news():
                 if not link or link in seen_links:
                     continue
 
-                search_area = f"{title} {summary}".lower()
+                search_area = f"{title} {summary}"
 
                 if not keyword_var_mi(search_area):
                     continue
@@ -113,7 +120,6 @@ def check_news():
 
                 source = feed.feed.get("title", "Bilinmiyor")
                 published = entry.get("published", "Tarih bilgisi yok")
-
                 content = summary if summary else "İçerik bulunamadı."
                 image_url = get_image(entry)
 
@@ -161,13 +167,13 @@ def handle_commands():
                 send_text(f"""
 🤖 <b>Bot Durumu</b>
 
-Durum: Aktif
+Durum: Aktif ✅
 Son kontrol: {last_check_time}
 Toplam kaynak: {len(RSS_FEEDS)}
 """)
 
-    except:
-        pass
+    except Exception as e:
+        print("Komut hatası:", e)
 
 
 while True:
