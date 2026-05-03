@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-KEYWORDS = ["elazığ", "elazig"]
+KEYWORDS = ["elazığ", "elazig", "elazığ’da", "elazigda", "elazığda"]
 
 RSS_FEEDS = [
     "https://rss.haberler.com/",
@@ -46,22 +46,46 @@ def keyword_var_mi(text):
 
 def get_page_details(url):
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8"
+        }
+
         r = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(r.text, "html.parser")
 
         image_url = None
+
         og_image = soup.find("meta", property="og:image")
         if og_image and og_image.get("content"):
             image_url = og_image["content"]
 
+        if not image_url:
+            twitter_image = soup.find("meta", attrs={"name": "twitter:image"})
+            if twitter_image and twitter_image.get("content"):
+                image_url = twitter_image["content"]
+
+        content = ""
+
+        og_desc = soup.find("meta", property="og:description")
+        if og_desc and og_desc.get("content"):
+            content += og_desc["content"] + " "
+
+        desc = soup.find("meta", attrs={"name": "description"})
+        if desc and desc.get("content"):
+            content += desc["content"] + " "
+
         paragraphs = soup.find_all("p")
-        content = " ".join(p.get_text(" ", strip=True) for p in paragraphs[:8])
+        paragraph_text = " ".join(p.get_text(" ", strip=True) for p in paragraphs[:10])
+        content += paragraph_text
+
+        content = clean_text(content)
         content = content[:1200]
 
         return content, image_url
+
     except Exception as e:
-        print("get_page_details hatasi:", e)
+        print("Detay sayfa hatası:", url, e)
         return "", None
 
 
@@ -75,20 +99,25 @@ def send_text(text):
             "disable_web_page_preview": False
         }, timeout=10)
     except Exception as e:
-        print("send_text hatasi:", e)
+        print("Mesaj gönderme hatası:", e)
 
 
 def send_photo(caption, image_url):
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-        requests.post(url, data={
+        response = requests.post(url, data={
             "chat_id": CHAT_ID,
             "photo": image_url,
             "caption": caption,
             "parse_mode": "HTML"
         }, timeout=10)
+
+        if response.status_code != 200:
+            send_text(caption)
+
     except Exception as e:
-        print("send_photo hatasi:", e)
+        print("Foto gönderme hatası:", e)
+        send_text(caption)
 
 
 def send_news_message(message, image_url=None):
@@ -106,7 +135,7 @@ def check_news():
         try:
             feed = feedparser.parse(rss)
 
-            for entry in reversed(feed.entries[:20]):
+            for entry in reversed(feed.entries[:30]):
                 title = clean_text(entry.get("title", ""))
                 summary = clean_text(entry.get("summary", ""))
                 link = entry.get("link", "")
@@ -126,15 +155,16 @@ def check_news():
                 source = feed.feed.get("title", "Bilinmiyor")
                 published = entry.get("published", "Tarih bilgisi yok")
 
-                if not content:
-                    content = summary if summary else "İçerik alınamadı."
+                final_content = content if content else summary
+                if not final_content:
+                    final_content = "İçerik alınamadı."
 
                 message = f"""
 📰 <b>Kent Elazığ Haber</b>
 
 <b>Haber Başlığı:</b> {html.escape(title)}
 
-<b>İçerik:</b> {html.escape(content)}
+<b>İçerik:</b> {html.escape(final_content)}
 
 <b>Yayınlayıcı:</b> {html.escape(source)}
 <b>Link:</b> {html.escape(link)}
@@ -145,7 +175,7 @@ def check_news():
                 send_news_message(message, image_url)
 
         except Exception as e:
-            print("RSS kontrol hatasi:", rss, e)
+            print("RSS kontrol hatası:", rss, e)
 
 
 def handle_commands():
@@ -178,7 +208,7 @@ Toplanan haber: {len(seen_links)}
                 send_text(durum_mesaji)
 
     except Exception as e:
-        print("handle_commands hatasi:", e)
+        print("Komut kontrol hatası:", e)
 
 
 while True:
